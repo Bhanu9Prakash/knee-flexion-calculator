@@ -42,16 +42,58 @@
 
     /* Styling for camera flip button */
     .camera-flip-button {
-      background-color: transparent;
+      background-color: rgba(0, 0, 0, 0.5);
       border: none;
-      color: #4a90e2;
+      color: #fff;
       font-size: 1.5rem;
       cursor: pointer;
-      margin-left: 1rem;
+      padding: 0.5rem;
+      border-radius: 50%;
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10;
     }
 
     .camera-flip-button:focus {
       outline: none;
+    }
+
+    /* Tooltip Styling */
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: pointer;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      width: 220px;
+      background-color: #4a90e2;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 10px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%; /* Position above the icon */
+      left: 50%;
+      margin-left: -110px; /* Center the tooltip */
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* Responsive Adjustments */
+    @media (max-width: 640px) {
+      .tooltip .tooltiptext {
+        width: 180px;
+        margin-left: -90px;
+      }
     }
   </style>
 </head>
@@ -68,7 +110,12 @@
         <div class="mb-5 sm:mb-6">
           <!-- The file input is now inside the modal, so we can remove it here or keep it hidden for fallback -->
           <input type="file" id="imageInput" accept="image/*" class="hidden" aria-label="Upload Image">
-          <p class="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">Please upload an image of the patient with a clear view of their knee flexion.</p>
+          <p class="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">
+            Please upload an image of the patient with a clear view of their knee flexion.
+          </p>
+          <p class="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">
+            Ensure the patient is positioned side-on (sagittal view) to the camera for accurate knee flexion measurement.
+          </p>
         </div>
         <div class="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
           <button onclick="openUploadModal()" id="calculateButton" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 sm:py-3 px-4 sm:px-6 rounded flex items-center justify-center">
@@ -82,9 +129,11 @@
 
       <!-- Image and Angle Adjustment Section -->
       <div id="imageContainer" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg hidden">
-        <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-700 mb-4 sm:mb-6">Adjust Points to Calculate Flexion Angle</h2>
-        <p class="text-gray-500 text-xs sm:text-sm text-center mb-3 sm:mb-4">Drag the red points to adjust their positions if needed. Ensure accurate placement for the best results.</p>
-        <div class="flex justify-center">
+        <h2 class="text-2xl sm:text-3xl font-bold text-center text-blue-700 mb-4 sm:mb-6">Adjust Points to Calculate Knee Flexion Angle</h2>
+        <p class="text-gray-500 text-xs sm:text-sm text-center mb-3 sm:mb-4">
+          Drag the red points to adjust their positions if needed. Ensure accurate placement for the best results.
+        </p>
+        <div class="flex justify-center relative">
           <canvas id="angleCanvas" class="w-full max-w-full"></canvas>
         </div>
         <div class="flex justify-center mt-3 sm:mt-4" id="angleMessageContainer"></div>
@@ -119,23 +168,21 @@
         <h3 class="text-lg sm:text-xl font-semibold text-gray-800">Upload Image</h3>
         <p class="mt-2 text-gray-600">Choose to take a photo using your camera or upload an existing image.</p>
       </div>
-      <div class="flex flex-col sm:flex-row justify-around items-center px-6 py-4">
-        <!-- Take Photo Button with Flip Icon -->
-        <div class="flex items-center">
-          <button onclick="openCamera()" class="flex items-center bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded">
-            <i class="fas fa-camera mr-2"></i> Take Photo
-          </button>
-          <button onclick="flipCamera()" class="camera-flip-button" aria-label="Flip Camera">
-            <i class="fas fa-sync-alt"></i>
-          </button>
-        </div>
+      <div class="flex flex-col sm:flex-row justify-around items-center px-6 py-4 gap-4">
+        <!-- Take Photo Button -->
+        <button onclick="openCamera()" class="flex-1 flex items-center justify-center bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded">
+          <i class="fas fa-camera mr-2"></i> Take Photo
+        </button>
         <!-- Upload Image Button -->
-        <button onclick="triggerImageUpload()" class="w-full sm:w-auto bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
+        <button onclick="triggerImageUpload()" class="flex-1 flex items-center justify-center bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
           <i class="fas fa-upload mr-2"></i> Upload Image
         </button>
       </div>
-      <!-- Video Stream Section -->
-      <div id="cameraSection" class="px-6 py-4 hidden">
+      <!-- Video Stream Section with Flip Icon Overlay -->
+      <div id="cameraSection" class="px-6 py-4 hidden relative">
+        <button onclick="flipCamera()" class="camera-flip-button" aria-label="Flip Camera">
+          <i class="fas fa-sync-alt"></i>
+        </button>
         <video id="videoStream" class="w-full rounded-lg"></video>
         <div class="flex justify-center mt-4">
           <button onclick="capturePhoto()" class="bg-purple-500 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded">
@@ -274,16 +321,43 @@
 
           let keypoints = poses[0].keypoints;
 
-          const requiredKeypoints = ['left_hip', 'left_knee', 'left_ankle'];
-          const missingKeypoints = requiredKeypoints.filter(name => !keypoints.some(k => k.name === name));
-          if (missingKeypoints.length > 0) {
-            showWarning('Unable to detect required keypoints. Please ensure the person in the image is positioned correctly.');
+          // Validate that keypoints correspond to a side view
+          const leftShoulder = keypoints.find(k => k.name === 'left_shoulder');
+          const rightShoulder = keypoints.find(k => k.name === 'right_shoulder');
+          const leftHip = keypoints.find(k => k.name === 'left_hip');
+          const rightHip = keypoints.find(k => k.name === 'right_hip');
+
+          if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+            showWarning('Insufficient keypoints detected. Please ensure the patient is fully visible.');
+            setButtonState('calculateButton', false);
+            return;
+          }
+
+          // Check alignment for side view (e.g., shoulders and hips should be horizontally aligned)
+          const shoulderDiff = Math.abs(leftShoulder.y - rightShoulder.y);
+          const hipDiff = Math.abs(leftHip.y - rightHip.y);
+
+          if (shoulderDiff > 30 || hipDiff > 30) { // Threshold in pixels, adjust as needed
+            showWarning('Please capture the image from the side for accurate knee flexion measurement.');
+            setButtonState('calculateButton', false);
+            return;
+          }
+
+          let keypointsOfInterest = {
+            hip: keypoints.find(k => k.name === 'left_hip'),
+            knee: keypoints.find(k => k.name === 'left_knee'),
+            ankle: keypoints.find(k => k.name === 'left_ankle')
+          };
+
+          // Validate that keypoints are detected
+          if (!keypointsOfInterest.hip || !keypointsOfInterest.knee || !keypointsOfInterest.ankle) {
+            showWarning('Unable to detect required keypoints. Please ensure the patient is positioned correctly.');
             setButtonState('calculateButton', false);
             return;
           }
 
           statusMessage.textContent = 'Drawing the keypoints on the image...';
-          drawInteractiveAngleVisualization(img, keypoints);
+          drawInteractiveAngleVisualization(img, keypointsOfInterest);
           setButtonState('calculateButton', false);
         } catch (error) {
           console.error(error);
@@ -310,6 +384,11 @@
       setTimeout(() => warningBox.remove(), 5000);
     }
 
+    /**
+     * Draws the interactive angle visualization on the canvas
+     * @param {HTMLImageElement} img 
+     * @param {Object} keypoints - Object containing 'hip', 'knee', 'ankle' keypoints
+     */
     function drawInteractiveAngleVisualization(img, keypoints) {
       const container = document.getElementById('imageContainer');
       container.classList.remove('hidden');
@@ -328,9 +407,16 @@
       const scaleX = canvas.width / img.width;
       const scaleY = canvas.height / img.height;
 
-      let hip = scaleKeypoint(keypoints.find(k => k.name === 'left_hip'), scaleX, scaleY);
-      let knee = scaleKeypoint(keypoints.find(k => k.name === 'left_knee'), scaleX, scaleY);
-      let ankle = scaleKeypoint(keypoints.find(k => k.name === 'left_ankle'), scaleX, scaleY);
+      // Directly access keypoints without using find
+      let hip = scaleKeypoint(keypoints.hip, scaleX, scaleY);
+      let knee = scaleKeypoint(keypoints.knee, scaleX, scaleY);
+      let ankle = scaleKeypoint(keypoints.ankle, scaleX, scaleY);
+
+      // Check if any keypoints are undefined
+      if (!hip || !knee || !ankle) {
+        showWarning('One or more keypoints are undefined. Please try uploading the image again.');
+        return;
+      }
 
       drawPointsAndLines(ctx, hip, knee, ankle);
 
@@ -413,7 +499,7 @@
       }
 
       document.getElementById('confirmButton').onclick = () => {
-        const flexionAngle = calculateAngle(hip, knee, ankle);
+        const flexionAngle = calculateFlexionAngle(hip, knee, ankle);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         drawPointsAndLines(ctx, hip, knee, ankle);
@@ -446,14 +532,30 @@
       };
     }
 
+    /**
+     * Scales a keypoint based on the canvas scaling factors
+     * @param {Object} keypoint - The keypoint object from PoseNet
+     * @param {number} scaleX - Scaling factor for the X-axis
+     * @param {number} scaleY - Scaling factor for the Y-axis
+     * @returns {Object|null} - Scaled keypoint or null if undefined
+     */
     function scaleKeypoint(keypoint, scaleX, scaleY) {
+      if (!keypoint) return null;
       return {
         x: keypoint.x * scaleX,
         y: keypoint.y * scaleY
       };
     }
 
+    /**
+     * Draws points and lines on the canvas
+     * @param {CanvasRenderingContext2D} ctx 
+     * @param {Object} hip 
+     * @param {Object} knee 
+     * @param {Object} ankle 
+     */
     function drawPointsAndLines(ctx, hip, knee, ankle) {
+      // Draw points
       ctx.fillStyle = 'red';
       [hip, knee, ankle].forEach(point => {
         ctx.beginPath();
@@ -461,6 +563,7 @@
         ctx.fill();
       });
 
+      // Draw lines (thigh and shin)
       ctx.strokeStyle = '#4a90e2';
       ctx.lineWidth = 5;
       ctx.beginPath();
@@ -469,14 +572,46 @@
       ctx.lineTo(ankle.x, ankle.y);
       ctx.stroke();
 
-      const flexionAngle = calculateAngle(hip, knee, ankle);
+      // Draw angle arc
+      const angle = calculateFlexionAngle(hip, knee, ankle);
+      drawAngleArc(ctx, hip, knee, ankle, angle);
+
+      // Display angle with definition
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(knee.x + 15, knee.y - 45, 80, 30);
+      ctx.fillRect(knee.x + 15, knee.y - 45, 180, 50); // Increased width for definition text
       ctx.fillStyle = '#fff';
-      ctx.font = '16px Arial'; // Reduced font size for better mobile fit
-      ctx.fillText(`${flexionAngle.toFixed(2)}°`, knee.x + 20, knee.y - 25);
+      ctx.font = '16px Arial';
+      ctx.fillText(`${angle.toFixed(2)}°`, knee.x + 20, knee.y - 25);
+      ctx.font = '12px Arial';
+      ctx.fillText('(Knee Flexion Angle)', knee.x + 20, knee.y - 5);
     }
 
+    /**
+     * Draws an arc representing the angle at the knee
+     * @param {CanvasRenderingContext2D} ctx 
+     * @param {Object} hip 
+     * @param {Object} knee 
+     * @param {Object} ankle 
+     * @param {number} angle 
+     */
+    function drawAngleArc(ctx, hip, knee, ankle, angle) {
+      const radius = 30;
+      const startAngle = Math.atan2(hip.y - knee.y, hip.x - knee.x);
+      const endAngle = Math.atan2(ankle.y - knee.y, ankle.x - knee.x);
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 3;
+      ctx.arc(knee.x, knee.y, radius, startAngle, endAngle);
+      ctx.stroke();
+    }
+
+    /**
+     * Gets the mouse position relative to the canvas
+     * @param {HTMLCanvasElement} canvas 
+     * @param {MouseEvent} evt 
+     * @returns {Object} - {x, y} coordinates
+     */
     function getMousePos(canvas, evt) {
       const rect = canvas.getBoundingClientRect();
       return {
@@ -485,6 +620,12 @@
       };
     }
 
+    /**
+     * Gets the touch position relative to the canvas
+     * @param {HTMLCanvasElement} canvas 
+     * @param {Touch} touch 
+     * @returns {Object} - {x, y} coordinates
+     */
     function getTouchPos(canvas, touch) {
       const rect = canvas.getBoundingClientRect();
       return {
@@ -493,19 +634,37 @@
       };
     }
 
+    /**
+     * Determines if a point was clicked based on proximity
+     * @param {Object} mousePos - {x, y} coordinates of the click
+     * @param {Object} point - {x, y} coordinates of the keypoint
+     * @returns {boolean}
+     */
     function isPointClicked(mousePos, point) {
+      if (!point) return false;
       const distance = Math.sqrt((mousePos.x - point.x) ** 2 + (mousePos.y - point.y) ** 2);
       return distance < 15;
     }
 
-    function calculateAngle(hip, knee, ankle) {
+    /**
+     * Calculates the knee flexion angle based on keypoints
+     * @param {Object} hip 
+     * @param {Object} knee 
+     * @param {Object} ankle 
+     * @returns {number} - Flexion angle in degrees
+     */
+    function calculateFlexionAngle(hip, knee, ankle) {
+      if (!hip || !knee || !ankle) return 0;
       const vector1 = [hip.x - knee.x, hip.y - knee.y];
       const vector2 = [ankle.x - knee.x, ankle.y - knee.y];
       const dotProduct = vector1[0] * vector2[0] + vector1[1] * vector2[1];
       const magnitude1 = Math.sqrt(vector1[0] ** 2 + vector1[1] ** 2);
       const magnitude2 = Math.sqrt(vector2[0] ** 2 + vector2[1] ** 2);
       const cosTheta = dotProduct / (magnitude1 * magnitude2);
-      return Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
+      const angleRad = Math.acos(Math.max(-1, Math.min(1, cosTheta)));
+      const angleDeg = angleRad * (180 / Math.PI);
+      const flexionAngle = 180 - angleDeg; // Invert angle to match clinical definitions
+      return flexionAngle;
     }
 
     // Modal Control Functions
@@ -703,6 +862,9 @@
       drawProgressChart();
     }
 
+    /**
+     * Draws the progress chart using Chart.js
+     */
     function drawProgressChart() {
       const selectedPatient = patientSelect.value;
       const filteredDataStore = dataStore.filter(entry => entry.userName === selectedPatient);
@@ -784,7 +946,8 @@
                 font: {
                   size: 12
                 },
-                beginAtZero: true
+                beginAtZero: true,
+                suggestedMax: 150 // To accommodate typical knee flexion range
               }
             }
           }
