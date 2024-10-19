@@ -1,6 +1,9 @@
 # Knee Flexion Calculator
 
 This web application allows physiotherapists and medical professionals to measure and track knee flexion angles for patients over time. It uses AI-powered pose detection to calculate knee angles from uploaded images or photos taken directly through the device's camera.
+https://bhanu9prakash.github.io/knee-flexion-calculator/
+![image](https://github.com/user-attachments/assets/546a9f84-5bc5-4b9d-99ee-58f14a4d5a66)
+
 
 ## Features
 
