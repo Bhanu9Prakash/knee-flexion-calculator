@@ -99,7 +99,15 @@
 </head>
 <body class="bg-gray-100 font-sans">
   <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-    <h1 class="text-3xl sm:text-4xl font-bold text-center text-blue-700 mb-8 sm:mb-10">Knee Flexion Calculator</h1>
+    <!-- Header with Info Button -->
+    <div class="flex justify-between items-center mb-8 sm:mb-10">
+      <h1 class="text-3xl sm:text-4xl font-bold text-blue-700">Knee Flexion Calculator</h1>
+      <!-- Info Button -->
+      <button onclick="openInfoModal()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center">
+        <i class="fas fa-info-circle mr-2"></i> Info
+      </button>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
       <!-- Input Section -->
       <div class="bg-white p-6 sm:p-8 rounded-lg shadow-lg">
@@ -157,6 +165,31 @@
       </div>
       <div id="progressChartContainer">
         <canvas id="progressChart" class="w-full h-full"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Information Modal -->
+  <div id="infoModal" class="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 hidden">
+    <div class="bg-white rounded-lg shadow-lg w-11/12 sm:w-2/3 lg:w-1/2">
+      <div class="px-6 py-4">
+        <h3 class="text-lg sm:text-xl font-semibold text-gray-800">About Knee Flexion Calculator</h3>
+        <p class="mt-2 text-gray-600">
+          The <strong>Knee Flexion Calculator</strong> is a tool designed to assist healthcare professionals, physiotherapists, and athletes in accurately measuring knee flexion angles. By analyzing images of the knee, this application provides precise measurements essential for diagnosing, monitoring, and rehabilitating knee conditions.
+        </p>
+      </div>
+      <div class="px-6 py-2">
+        <h4 class="text-md sm:text-lg font-semibold text-gray-800">Key Applications:</h4>
+        <ul class="list-disc list-inside text-gray-600 mt-2">
+          <li><strong>ACL Injury Assessment:</strong> Evaluate the severity of Anterior Cruciate Ligament injuries and monitor recovery progress.</li>
+          <li><strong>Rehabilitation Tracking:</strong> Monitor patients' progress during physical therapy to ensure effective recovery.</li>
+          <li><strong>Sports Performance:</strong> Analyze athletes' knee movements to enhance performance and prevent injuries.</li>
+          <li><strong>Post-Surgery Evaluation:</strong> Assess knee function after surgical interventions to guide further treatment.</li>
+          <li><strong>Orthopedic Research:</strong> Facilitate studies on knee biomechanics and the effectiveness of various treatments.</li>
+        </ul>
+      </div>
+      <div class="flex justify-end px-6 py-4">
+        <button onclick="closeInfoModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded">Close</button>
       </div>
     </div>
   </div>
@@ -233,6 +266,7 @@
     const uploadModal = document.getElementById('uploadModal');
     const resetModal = document.getElementById('resetModal');
     const deletePatientModal = document.getElementById('deletePatientModal');
+    const infoModal = document.getElementById('infoModal'); // New Info Modal
     const videoStream = document.getElementById('videoStream');
     const cameraSection = document.getElementById('cameraSection');
     let mediaStream = null;
@@ -1009,6 +1043,24 @@
         drawProgressChart();
       }
     });
+
+    // Information Modal Control Functions
+
+    /**
+     * Opens the Information Modal
+     */
+    function openInfoModal() {
+      infoModal.classList.remove('hidden');
+      infoModal.classList.add('flex');
+    }
+
+    /**
+     * Closes the Information Modal
+     */
+    function closeInfoModal() {
+      infoModal.classList.add('hidden');
+      infoModal.classList.remove('flex');
+    }
   </script>
 </body>
 </html>
