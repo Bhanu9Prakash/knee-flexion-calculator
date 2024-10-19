@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knee Flexion Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@^2.0/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-gray-100 font-sans">
+  <div class="container mx-auto p-8">
+    <h1 class="text-4xl font-bold text-center text-blue-700 mb-10">Knee Flexion Calculator</h1>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="bg-white p-8 rounded-lg shadow-lg">
+        <div class="flex flex-col gap-4 mb-6">
+          <input type="text" id="userName" placeholder="Enter patient name" class="p-4 border border-gray-300 rounded">
+          <input type="date" id="dateInput" class="p-4 border border-gray-300 rounded">
+        </div>
+        <div class="mb-6">
+          <input type="file" id="imageInput" accept="image/*" class="w-full p-4 border border-gray-300 rounded">
+        </div>
+        <div class="flex justify-between gap-4">
+          <button onclick="processImage()" id="calculateButton" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded">Upload and Adjust Points <i class="fas fa-upload ml-2"></i></button>
+          <button onclick="resetData()" class="flex-1 bg-red-500 hover:bg-red-700 text-white font-bold py-3 px-6 rounded">Reset Data <i class="fas fa-trash ml-2"></i></button>
+        </div>
+      </div>
+
+      <div id="imageContainer" class="bg-white p-8 rounded-lg shadow-lg hidden">
+        <h2 class="text-3xl font-bold text-center text-blue-700 mb-6">Adjust Points to Calculate Flexion Angle</h2>
+        <div class="flex justify-center">
+          <canvas id="angleCanvas" class="max-w-full"></canvas>
+        </div>
+        <div class="flex justify-center mt-4">
+          <button id="confirmButton" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Confirm and Save Angle</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white p-8 rounded-lg shadow-lg mt-10">
+      <h2 class="text-3xl font-bold text-center text-blue-700 mb-6">Progress Over Time</h2>
+      <canvas id="progressChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const dataStore = JSON.parse(localStorage.getItem('kneeFlexionData')) || [];
+
+    async function processImage() {
+      const userName = document.getElementById('userName').value;
+      const date = document.getElementById('dateInput').value;
+      const imageInput = document.getElementById('imageInput').files[0];
+
+      if (!userName || !date || !imageInput) {
+        showWarning('Please provide all inputs.');
+        return;
+      }
+
+      document.getElementById('calculateButton').disabled = true;
+      document.getElementById('calculateButton').textContent = 'Processing...';
+
+      const img = new Image();
+      img.src = URL.createObjectURL(imageInput);
+      img.onload = async () => {
+        const detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
+        const poses = await detector.estimatePoses(img, { flipHorizontal: false });
+
+        if (poses.length === 0 || !poses[0].keypoints) {
+          showWarning('Unable to detect human pose. Please upload a valid image.');
+          document.getElementById('calculateButton').disabled = false;
+          document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
+          return;
+        }
+
+        let keypoints = poses[0].keypoints;
+
+        // Ensure keypoints are correctly labeled
+        const requiredKeypoints = ['left_hip', 'left_knee', 'left_ankle'];
+        const missingKeypoints = requiredKeypoints.filter(name => !keypoints.some(k => k.name === name));
+        if (missingKeypoints.length > 0) {
+          showWarning('Unable to detect required keypoints. Please ensure the person in the image is positioned correctly.');
+          document.getElementById('calculateButton').disabled = false;
+          document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
+          return;
+        }
+
+        drawInteractiveAngleVisualization(img, keypoints);
+        document.getElementById('calculateButton').disabled = false;
+        document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
+      };
+    }
+
+    function showWarning(message) {
+      const warningBox = document.createElement('div');
+      warningBox.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4';
+      warningBox.innerHTML = `<strong class='font-bold'>Warning: </strong><span class='block sm:inline'>${message}</span>`;
+      document.querySelector('.container').insertBefore(warningBox, document.querySelector('.bg-white'));
+      setTimeout(() => warningBox.remove(), 5000);
+    }
+
+    function drawInteractiveAngleVisualization(img, keypoints) {
+      const container = document.getElementById('imageContainer');
+      container.classList.remove('hidden');
+
+      const canvas = document.getElementById('angleCanvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = container.clientWidth * 0.9;
+      canvas.height = (img.height / img.width) * canvas.width;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      let hip = keypoints?.find(k => k.name === 'left_hip') || { x: 100, y: 100 };
+      let knee = keypoints?.find(k => k.name === 'left_knee') || { x: 200, y: 300 };
+      let ankle = keypoints?.find(k => k.name === 'left_ankle') || { x: 300, y: 500 };
+
+      drawPointsAndLines(ctx, hip, knee, ankle);
+
+      let selectedPoint = null;
+
+      canvas.addEventListener('mousedown', (e) => {
+        const mousePos = getMousePos(canvas, e);
+        if (isPointClicked(mousePos, hip)) {
+          selectedPoint = 'hip';
+        } else if (isPointClicked(mousePos, knee)) {
+          selectedPoint = 'knee';
+        } else if (isPointClicked(mousePos, ankle)) {
+          selectedPoint = 'ankle';
+        }
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (selectedPoint) {
+          const mousePos = getMousePos(canvas, e);
+          if (selectedPoint === 'hip') {
+            hip = mousePos;
+          } else if (selectedPoint === 'knee') {
+            knee = mousePos;
+          } else if (selectedPoint === 'ankle') {
+            ankle = mousePos;
+          }
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          drawPointsAndLines(ctx, hip, knee, ankle);
+        }
+      });
+
+      canvas.addEventListener('mouseup', () => {
+        selectedPoint = null;
+      });
+
+      document.getElementById('confirmButton').onclick = () => {
+        const flexionAngle = calculateAngle(hip, knee, ankle);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        drawPointsAndLines(ctx, hip, knee, ankle);
+        const messageBox = document.createElement('div');
+        messageBox.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mt-4';
+        messageBox.innerHTML = `<strong class='font-bold'>Knee Flexion Angle: </strong><span class='block sm:inline'>${flexionAngle.toFixed(2)} degrees</span>`;
+        container.appendChild(messageBox);
+        const userName = document.getElementById('userName').value;
+        const date = document.getElementById('dateInput').value;
+        dataStore.push({ userName, date, flexionAngle });
+        localStorage.setItem('kneeFlexionData', JSON.stringify(dataStore));
+        drawProgressChart();
+      };
+    }
+
+    function drawPointsAndLines(ctx, hip, knee, ankle) {
+      ctx.fillStyle = 'red';
+      [hip, knee, ankle].forEach(point => {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      ctx.strokeStyle = '#4a90e2';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(hip.x, hip.y);
+      ctx.lineTo(knee.x, knee.y);
+      ctx.lineTo(ankle.x, ankle.y);
+      ctx.stroke();
+
+      const flexionAngle = calculateAngle(hip, knee, ankle);
+      ctx.fillStyle = '#000';
+      ctx.font = '24px Arial';
+      ctx.fillText(`${flexionAngle.toFixed(2)}°`, knee.x + 20, knee.y - 20);
+    }
+
+    function getMousePos(canvas, evt) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+      };
+    }
+
+    function isPointClicked(mousePos, point) {
+      const distance = Math.sqrt((mousePos.x - point.x) ** 2 + (mousePos.y - point.y) ** 2);
+      return distance < 15;
+    }
+
+    function calculateAngle(hip, knee, ankle) {
+      const vector1 = [hip.x - knee.x, hip.y - knee.y];
+      const vector2 = [ankle.x - knee.x, ankle.y - knee.y];
+      const dotProduct = vector1[0] * vector2[0] + vector1[1] * vector2[1];
+      const magnitude1 = Math.sqrt(vector1[0] ** 2 + vector1[1] ** 2);
+      const magnitude2 = Math.sqrt(vector2[0] ** 2 + vector2[1] ** 2);
+      const cosTheta = dotProduct / (magnitude1 * magnitude2);
+      return Math.acos(Math.max(-1, Math.min(1, cosTheta))) * (180 / Math.PI);
+    }
+
+    function resetData() {
+      localStorage.removeItem('kneeFlexionData');
+      location.reload();
+    }
+
+    function drawProgressChart() {
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      const labels = dataStore.map(entry => `${entry.userName} (${entry.date})`);
+      const data = dataStore.map(entry => entry.flexionAngle);
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Knee Flexion Over Time',
+            data,
+            borderColor: '#4a90e2',
+            backgroundColor: 'rgba(74, 144, 226, 0.2)',
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Patient Name and Date'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Flexion Angle (degrees)'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    if (dataStore.length > 0) {
+      drawProgressChart();
+    }
+  </script>
+</body>
+</html>
