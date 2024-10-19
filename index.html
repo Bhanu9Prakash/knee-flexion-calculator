@@ -39,6 +39,20 @@
     #videoStream {
       display: none;
     }
+
+    /* Styling for camera flip button */
+    .camera-flip-button {
+      background-color: transparent;
+      border: none;
+      color: #4a90e2;
+      font-size: 1.5rem;
+      cursor: pointer;
+      margin-left: 1rem;
+    }
+
+    .camera-flip-button:focus {
+      outline: none;
+    }
   </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -106,12 +120,17 @@
         <p class="mt-2 text-gray-600">Choose to take a photo using your camera or upload an existing image.</p>
       </div>
       <div class="flex flex-col sm:flex-row justify-around items-center px-6 py-4">
-        <!-- Take Photo Button -->
-        <button onclick="openCamera()" class="w-full sm:w-1/2 bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded mb-4 sm:mb-0">
-          <i class="fas fa-camera mr-2"></i> Take Photo
-        </button>
+        <!-- Take Photo Button with Flip Icon -->
+        <div class="flex items-center">
+          <button onclick="openCamera()" class="flex items-center bg-green-500 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded">
+            <i class="fas fa-camera mr-2"></i> Take Photo
+          </button>
+          <button onclick="flipCamera()" class="camera-flip-button" aria-label="Flip Camera">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
         <!-- Upload Image Button -->
-        <button onclick="triggerImageUpload()" class="w-full sm:w-1/2 bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
+        <button onclick="triggerImageUpload()" class="w-full sm:w-auto bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded">
           <i class="fas fa-upload mr-2"></i> Upload Image
         </button>
       </div>
@@ -168,7 +187,44 @@
     const resetModal = document.getElementById('resetModal');
     const deletePatientModal = document.getElementById('deletePatientModal');
     const videoStream = document.getElementById('videoStream');
+    const cameraSection = document.getElementById('cameraSection');
     let mediaStream = null;
+    let currentCameraFacingMode = 'environment'; // Default to back camera
+
+    /**
+     * Toggle between front and back cameras
+     */
+    function flipCamera() {
+      if (currentCameraFacingMode === 'environment') {
+        currentCameraFacingMode = 'user';
+      } else {
+        currentCameraFacingMode = 'environment';
+      }
+      switchCamera();
+    }
+
+    /**
+     * Switch the camera stream to the current facing mode
+     */
+    async function switchCamera() {
+      if (mediaStream) {
+        // Stop existing tracks
+        mediaStream.getTracks().forEach(track => track.stop());
+      }
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: currentCameraFacingMode
+          }
+        });
+        videoStream.srcObject = mediaStream;
+        videoStream.play();
+      } catch (error) {
+        showWarning('Unable to switch camera. Please try again or use the upload option.');
+        console.error(error);
+      }
+    }
 
     function setButtonState(buttonId, isProcessing) {
       const button = document.getElementById(buttonId);
@@ -177,13 +233,17 @@
         button.innerHTML = 'Processing...';
       } else {
         if (buttonId === 'calculateButton') {
-          button.innerHTML = 'Upload <i class="fas fa-upload ml-2"></i>';
+          button.innerHTML = 'Upload and Adjust Points <i class="fas fa-upload ml-2"></i>';
         } else {
           // Handle other buttons if needed
         }
       }
     }
 
+    /**
+     * Process image from either camera capture or file upload
+     * @param {string} imageSrc - Data URL of the image
+     */
     async function processImage(imageSrc) {
       const userName = document.getElementById('userName').value.trim();
       const date = document.getElementById('dateInput').value;
@@ -479,13 +539,19 @@
       }
     });
 
-    // Open camera stream
+    /**
+     * Open camera with the current facing mode
+     */
     async function openCamera() {
       const cameraSection = document.getElementById('cameraSection');
       const video = document.getElementById('videoStream');
 
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: currentCameraFacingMode
+          }
+        });
         video.srcObject = mediaStream;
         video.play();
         video.style.display = 'block';
@@ -496,7 +562,9 @@
       }
     }
 
-    // Capture photo from video stream
+    /**
+     * Capture photo from video stream
+     */
     function capturePhoto() {
       const video = document.getElementById('videoStream');
       const canvas = document.createElement('canvas');
@@ -514,7 +582,9 @@
       processImage(imageDataURL);
     }
 
-    // Close camera stream
+    /**
+     * Close camera stream
+     */
     function closeCamera() {
       const video = document.getElementById('videoStream');
       const cameraSection = document.getElementById('cameraSection');
