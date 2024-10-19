@@ -71,7 +71,7 @@
       img.onload = async () => {
         try {
           statusMessage.textContent = 'Estimating the pose...';
-          const detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
+          const detector = await poseDetection.createDetector(poseDetection.SupportedModels.PoseNet);
           const poses = await detector.estimatePoses(img, { flipHorizontal: false });
 
           if (poses.length === 0 || !poses[0].keypoints) {
