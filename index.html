@@ -39,6 +39,8 @@
       </div>
     </div>
 
+    <div id="statusMessage" class="text-center text-lg text-blue-700 mt-4 hidden"></div>
+
     <div class="bg-white p-8 rounded-lg shadow-lg mt-10">
       <h2 class="text-3xl font-bold text-center text-blue-700 mb-6">Progress Over Time</h2>
       <canvas id="progressChart"></canvas>
@@ -52,6 +54,7 @@
       const userName = document.getElementById('userName').value;
       const date = document.getElementById('dateInput').value;
       const imageInput = document.getElementById('imageInput').files[0];
+      const statusMessage = document.getElementById('statusMessage');
 
       if (!userName || !date || !imageInput) {
         showWarning('Please provide all inputs.');
@@ -60,35 +63,48 @@
 
       document.getElementById('calculateButton').disabled = true;
       document.getElementById('calculateButton').textContent = 'Processing...';
+      statusMessage.classList.remove('hidden');
+      statusMessage.textContent = 'Loading and analyzing the image...';
 
       const img = new Image();
       img.src = URL.createObjectURL(imageInput);
       img.onload = async () => {
-        const detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
-        const poses = await detector.estimatePoses(img, { flipHorizontal: false });
+        try {
+          statusMessage.textContent = 'Estimating the pose...';
+          const detector = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet);
+          const poses = await detector.estimatePoses(img, { flipHorizontal: false });
 
-        if (poses.length === 0 || !poses[0].keypoints) {
-          showWarning('Unable to detect human pose. Please upload a valid image.');
+          if (poses.length === 0 || !poses[0].keypoints) {
+            showWarning('Unable to detect human pose. Please upload a valid image.');
+            document.getElementById('calculateButton').disabled = false;
+            document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
+            statusMessage.classList.add('hidden');
+            return;
+          }
+
+          let keypoints = poses[0].keypoints;
+
+          const requiredKeypoints = ['left_hip', 'left_knee', 'left_ankle'];
+          const missingKeypoints = requiredKeypoints.filter(name => !keypoints.some(k => k.name === name));
+          if (missingKeypoints.length > 0) {
+            showWarning('Unable to detect required keypoints. Please ensure the person in the image is positioned correctly.');
+            document.getElementById('calculateButton').disabled = false;
+            document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
+            statusMessage.classList.add('hidden');
+            return;
+          }
+
+          statusMessage.textContent = 'Drawing the keypoints on the image...';
+          drawInteractiveAngleVisualization(img, keypoints);
           document.getElementById('calculateButton').disabled = false;
           document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
-          return;
-        }
-
-        let keypoints = poses[0].keypoints;
-
-        // Ensure keypoints are correctly labeled
-        const requiredKeypoints = ['left_hip', 'left_knee', 'left_ankle'];
-        const missingKeypoints = requiredKeypoints.filter(name => !keypoints.some(k => k.name === name));
-        if (missingKeypoints.length > 0) {
-          showWarning('Unable to detect required keypoints. Please ensure the person in the image is positioned correctly.');
+          statusMessage.classList.add('hidden');
+        } catch (error) {
+          showWarning('An error occurred during image processing. Please try again.');
           document.getElementById('calculateButton').disabled = false;
           document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
-          return;
+          statusMessage.classList.add('hidden');
         }
-
-        drawInteractiveAngleVisualization(img, keypoints);
-        document.getElementById('calculateButton').disabled = false;
-        document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
       };
     }
 
@@ -111,9 +127,12 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      let hip = keypoints?.find(k => k.name === 'left_hip') || { x: 100, y: 100 };
-      let knee = keypoints?.find(k => k.name === 'left_knee') || { x: 200, y: 300 };
-      let ankle = keypoints?.find(k => k.name === 'left_ankle') || { x: 300, y: 500 };
+      const scaleX = canvas.width / img.width;
+      const scaleY = canvas.height / img.height;
+
+      let hip = scaleKeypoint(keypoints.find(k => k.name === 'left_hip'), scaleX, scaleY);
+      let knee = scaleKeypoint(keypoints.find(k => k.name === 'left_knee'), scaleX, scaleY);
+      let ankle = scaleKeypoint(keypoints.find(k => k.name === 'left_ankle'), scaleX, scaleY);
 
       drawPointsAndLines(ctx, hip, knee, ankle);
 
@@ -164,6 +183,13 @@
         dataStore.push({ userName, date, flexionAngle });
         localStorage.setItem('kneeFlexionData', JSON.stringify(dataStore));
         drawProgressChart();
+      };
+    }
+
+    function scaleKeypoint(keypoint, scaleX, scaleY) {
+      return {
+        x: keypoint.x * scaleX,
+        y: keypoint.y * scaleY
       };
     }
 
