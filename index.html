@@ -572,37 +572,60 @@
       ctx.lineTo(ankle.x, ankle.y);
       ctx.stroke();
 
-      // Draw angle arc
-      const angle = calculateFlexionAngle(hip, knee, ankle);
-      drawAngleArc(ctx, hip, knee, ankle, angle);
+      // Draw extended thigh line as a reference for 0° flexion
+      const thighVector = {
+        x: knee.x - hip.x,
+        y: knee.y - hip.y
+      };
+      const extensionLength = 100; // Length of the extended line
 
-      // Display angle with definition
+      const extendedThigh = {
+        x: knee.x + (thighVector.x / Math.hypot(thighVector.x, thighVector.y)) * extensionLength,
+        y: knee.y + (thighVector.y / Math.hypot(thighVector.x, thighVector.y)) * extensionLength
+      };
+
+      ctx.setLineDash([5, 5]); // Create a dashed line pattern
+      ctx.beginPath();
+      ctx.moveTo(knee.x, knee.y);
+      ctx.lineTo(extendedThigh.x, extendedThigh.y);
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset dash to solid lines for other elements
+
+      // Draw the knee flexion angle arc based on the extended thigh reference and shin
+      const flexionAngle = calculateFlexionAngle(hip, knee, ankle);
+      drawAngleArc(ctx, knee, extendedThigh, ankle, flexionAngle);
+
+      // Display the calculated angle on the canvas
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       ctx.fillRect(knee.x + 15, knee.y - 45, 180, 50); // Increased width for definition text
       ctx.fillStyle = '#fff';
       ctx.font = '16px Arial';
-      ctx.fillText(`${angle.toFixed(2)}°`, knee.x + 20, knee.y - 25);
+      ctx.fillText(`${flexionAngle.toFixed(2)}°`, knee.x + 20, knee.y - 25);
       ctx.font = '12px Arial';
       ctx.fillText('(Knee Flexion Angle)', knee.x + 20, knee.y - 5);
     }
 
     /**
-     * Draws an arc representing the angle at the knee
+     * Draws an arc representing the flexion angle at the knee
      * @param {CanvasRenderingContext2D} ctx 
-     * @param {Object} hip 
      * @param {Object} knee 
+     * @param {Object} extendedThigh 
      * @param {Object} ankle 
      * @param {number} angle 
      */
-    function drawAngleArc(ctx, hip, knee, ankle, angle) {
+    function drawAngleArc(ctx, knee, extendedThigh, ankle, angle) {
       const radius = 30;
-      const startAngle = Math.atan2(hip.y - knee.y, hip.x - knee.x);
+
+      // Start angle is from the extended thigh to the knee
+      const startAngle = Math.atan2(extendedThigh.y - knee.y, extendedThigh.x - knee.x);
       const endAngle = Math.atan2(ankle.y - knee.y, ankle.x - knee.x);
 
       ctx.beginPath();
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 3;
-      ctx.arc(knee.x, knee.y, radius, startAngle, endAngle);
+
+      // Draw the arc for knee flexion from extended thigh to shin
+      ctx.arc(knee.x, knee.y, radius, startAngle, endAngle, false); // Changed anticlockwise to false
       ctx.stroke();
     }
 
@@ -655,16 +678,40 @@
      */
     function calculateFlexionAngle(hip, knee, ankle) {
       if (!hip || !knee || !ankle) return 0;
-      const vector1 = [hip.x - knee.x, hip.y - knee.y];
-      const vector2 = [ankle.x - knee.x, ankle.y - knee.y];
-      const dotProduct = vector1[0] * vector2[0] + vector1[1] * vector2[1];
-      const magnitude1 = Math.sqrt(vector1[0] ** 2 + vector1[1] ** 2);
-      const magnitude2 = Math.sqrt(vector2[0] ** 2 + vector2[1] ** 2);
+
+      // Vector for the thigh (hip to knee)
+      const thighVector = {
+        x: knee.x - hip.x,
+        y: knee.y - hip.y
+      };
+
+      // Extend the thigh line to use as a baseline for measurement
+      const extensionLength = 100; // Arbitrary length to extend for visual reference
+
+      const extendedThigh = {
+        x: knee.x + (thighVector.x / Math.hypot(thighVector.x, thighVector.y)) * extensionLength,
+        y: knee.y + (thighVector.y / Math.hypot(thighVector.x, thighVector.y)) * extensionLength
+      };
+
+      // Vector for the shin (knee to ankle)
+      const shinVector = {
+        x: ankle.x - knee.x,
+        y: ankle.y - knee.y
+      };
+
+      // Calculate angle using dot product formula
+      const dotProduct = thighVector.x * shinVector.x + thighVector.y * shinVector.y;
+      const magnitude1 = Math.hypot(thighVector.x, thighVector.y);
+      const magnitude2 = Math.hypot(shinVector.x, shinVector.y);
+
       const cosTheta = dotProduct / (magnitude1 * magnitude2);
-      const angleRad = Math.acos(Math.max(-1, Math.min(1, cosTheta)));
-      const angleDeg = angleRad * (180 / Math.PI);
-      const flexionAngle = 180 - angleDeg; // Invert angle to match clinical definitions
-      return flexionAngle;
+      let angleRad = Math.acos(Math.max(-1, Math.min(1, cosTheta)));
+      let angleDeg = angleRad * (180 / Math.PI);
+
+      // No need to adjust the angle based on the direction anymore
+      // The measurement direction has been reversed in the arc drawing
+
+      return angleDeg;
     }
 
     // Modal Control Functions
