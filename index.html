@@ -16,11 +16,12 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <div class="bg-white p-8 rounded-lg shadow-lg">
         <div class="flex flex-col gap-4 mb-6">
-          <input type="text" id="userName" placeholder="Enter patient name" class="p-4 border border-gray-300 rounded">
-          <input type="date" id="dateInput" class="p-4 border border-gray-300 rounded">
+          <input type="text" id="userName" placeholder="Enter patient name" class="p-4 border border-gray-300 rounded" aria-label="Patient Name">
+          <input type="date" id="dateInput" class="p-4 border border-gray-300 rounded" aria-label="Date">
         </div>
         <div class="mb-6">
-          <input type="file" id="imageInput" accept="image/*" class="w-full p-4 border border-gray-300 rounded">
+          <input type="file" id="imageInput" accept="image/*" class="w-full p-4 border border-gray-300 rounded" aria-label="Upload Image">
+          <p class="text-gray-500 text-sm mt-2">Please upload an image of the patient with a clear view of their knee flexion.</p>
         </div>
         <div class="flex justify-between gap-4">
           <button onclick="processImage()" id="calculateButton" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded">Upload and Adjust Points <i class="fas fa-upload ml-2"></i></button>
@@ -30,9 +31,11 @@
 
       <div id="imageContainer" class="bg-white p-8 rounded-lg shadow-lg hidden">
         <h2 class="text-3xl font-bold text-center text-blue-700 mb-6">Adjust Points to Calculate Flexion Angle</h2>
+        <p class="text-gray-500 text-center mb-4">Drag the red points to adjust their positions if needed. Ensure accurate placement for the best results.</p>
         <div class="flex justify-center">
           <canvas id="angleCanvas" class="max-w-full"></canvas>
         </div>
+        <div class="flex justify-center mt-4" id="angleMessageContainer"></div>
         <div class="flex justify-center mt-4">
           <button id="confirmButton" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Confirm and Save Angle</button>
         </div>
@@ -42,13 +45,23 @@
     <div id="statusMessage" class="text-center text-lg text-blue-700 mt-4 hidden"></div>
 
     <div class="bg-white p-8 rounded-lg shadow-lg mt-10">
-      <h2 class="text-3xl font-bold text-center text-blue-700 mb-6">Progress Over Time</h2>
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <label for="patientSelect" class="block text-lg font-medium text-gray-700">Select Patient:</label>
+          <select id="patientSelect" class="p-2 border border-gray-300 rounded" onchange="updateProgressChart()">
+            <option value="all">All Patients</option>
+          </select>
+        </div>
+        <button onclick="deletePatientData()" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Delete Selected Patient Data</button>
+      </div>
       <canvas id="progressChart"></canvas>
     </div>
   </div>
 
   <script>
-    const dataStore = JSON.parse(localStorage.getItem('kneeFlexionData')) || [];
+    let dataStore = JSON.parse(localStorage.getItem('kneeFlexionData')) || [];
+    let chart;
+    let patientSelect = document.getElementById('patientSelect');
 
     async function processImage() {
       const userName = document.getElementById('userName').value;
@@ -64,7 +77,7 @@
       document.getElementById('calculateButton').disabled = true;
       document.getElementById('calculateButton').textContent = 'Processing...';
       statusMessage.classList.remove('hidden');
-      statusMessage.textContent = 'Loading and analyzing the image...';
+      statusMessage.textContent = 'Loading image...';
 
       const img = new Image();
       img.src = URL.createObjectURL(imageInput);
@@ -76,9 +89,7 @@
 
           if (poses.length === 0 || !poses[0].keypoints) {
             showWarning('Unable to detect human pose. Please upload a valid image.');
-            document.getElementById('calculateButton').disabled = false;
-            document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
-            statusMessage.classList.add('hidden');
+            resetCalculateButton();
             return;
           }
 
@@ -88,24 +99,24 @@
           const missingKeypoints = requiredKeypoints.filter(name => !keypoints.some(k => k.name === name));
           if (missingKeypoints.length > 0) {
             showWarning('Unable to detect required keypoints. Please ensure the person in the image is positioned correctly.');
-            document.getElementById('calculateButton').disabled = false;
-            document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
-            statusMessage.classList.add('hidden');
+            resetCalculateButton();
             return;
           }
 
           statusMessage.textContent = 'Drawing the keypoints on the image...';
           drawInteractiveAngleVisualization(img, keypoints);
-          document.getElementById('calculateButton').disabled = false;
-          document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
-          statusMessage.classList.add('hidden');
+          resetCalculateButton();
         } catch (error) {
           showWarning('An error occurred during image processing. Please try again.');
-          document.getElementById('calculateButton').disabled = false;
-          document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
-          statusMessage.classList.add('hidden');
+          resetCalculateButton();
         }
       };
+    }
+
+    function resetCalculateButton() {
+      document.getElementById('calculateButton').disabled = false;
+      document.getElementById('calculateButton').textContent = 'Upload and Adjust Points';
+      document.getElementById('statusMessage').classList.add('hidden');
     }
 
     function showWarning(message) {
@@ -174,13 +185,17 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         drawPointsAndLines(ctx, hip, knee, ankle);
+        const messageContainer = document.getElementById('angleMessageContainer');
+        messageContainer.innerHTML = '';
         const messageBox = document.createElement('div');
         messageBox.className = 'bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mt-4';
         messageBox.innerHTML = `<strong class='font-bold'>Knee Flexion Angle: </strong><span class='block sm:inline'>${flexionAngle.toFixed(2)} degrees</span>`;
-        container.appendChild(messageBox);
+        messageContainer.appendChild(messageBox);
         const userName = document.getElementById('userName').value;
         const date = document.getElementById('dateInput').value;
+        dataStore = dataStore.filter(entry => !(entry.userName === userName && entry.date === date));
         dataStore.push({ userName, date, flexionAngle });
+        dataStore = dataStore.sort((a, b) => new Date(a.date) - new Date(b.date));
         localStorage.setItem('kneeFlexionData', JSON.stringify(dataStore));
         drawProgressChart();
       };
@@ -210,7 +225,9 @@
       ctx.stroke();
 
       const flexionAngle = calculateAngle(hip, knee, ankle);
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(knee.x + 15, knee.y - 45, 80, 30);
+      ctx.fillStyle = '#fff';
       ctx.font = '24px Arial';
       ctx.fillText(`${flexionAngle.toFixed(2)}°`, knee.x + 20, knee.y - 20);
     }
@@ -243,12 +260,34 @@
       location.reload();
     }
 
-    function drawProgressChart() {
-      const ctx = document.getElementById('progressChart').getContext('2d');
-      const labels = dataStore.map(entry => `${entry.userName} (${entry.date})`);
-      const data = dataStore.map(entry => entry.flexionAngle);
+    function updatePatientSelect() {
+      const uniquePatients = [...new Set(dataStore.map(entry => entry.userName))];
+      patientSelect.innerHTML = '<option value="all">All Patients</option>';
+      uniquePatients.forEach(patient => {
+        const option = document.createElement('option');
+        option.value = patient;
+        option.textContent = patient;
+        patientSelect.appendChild(option);
+      });
+    }
 
-      new Chart(ctx, {
+    function updateProgressChart() {
+      drawProgressChart();
+    }
+
+    function drawProgressChart() {
+      const selectedPatient = patientSelect.value;
+      const filteredDataStore = selectedPatient === 'all' ? dataStore : dataStore.filter(entry => entry.userName === selectedPatient);
+      const sortedDataStore = filteredDataStore.sort((a, b) => new Date(a.date) - new Date(b.date)).filter((entry, index, self) => index === self.findIndex(e => e.userName === entry.userName && e.date === entry.date));
+      const labels = sortedDataStore.map(entry => `${entry.userName} (${entry.date})`);
+      const data = sortedDataStore.map(entry => entry.flexionAngle);
+
+      if (chart) {
+        chart.destroy();
+      }
+
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      chart = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
@@ -280,7 +319,20 @@
       });
     }
 
+    function deletePatientData() {
+      const selectedPatient = patientSelect.value;
+      if (selectedPatient === 'all') {
+        alert('Please select a specific patient to delete data.');
+        return;
+      }
+      dataStore = dataStore.filter(entry => entry.userName !== selectedPatient);
+      localStorage.setItem('kneeFlexionData', JSON.stringify(dataStore));
+      updatePatientSelect();
+      drawProgressChart();
+    }
+
     if (dataStore.length > 0) {
+      updatePatientSelect();
       drawProgressChart();
     }
   </script>
